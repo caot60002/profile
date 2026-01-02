@@ -52,15 +52,50 @@ const App: React.FC = () => {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [showVolumeHint, setShowVolumeHint] = useState(false);
+  
+  // Saving Status State
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  // Persist profile to localStorage on change
+  // Debounce Save Logic
   useEffect(() => {
-    try {
-      localStorage.setItem('guns_lol_clone_profile', JSON.stringify(profile));
-    } catch (e) {
-      console.error("Failed to save profile to localStorage:", e);
-    }
+    setSaveStatus('saving');
+    const timer = setTimeout(() => {
+        try {
+            localStorage.setItem('guns_lol_clone_profile', JSON.stringify(profile));
+            setSaveStatus('saved');
+            // Reset status back to idle after a moment
+            setTimeout(() => setSaveStatus('idle'), 2000);
+        } catch (e) {
+            console.error("Failed to save profile:", e);
+            setSaveStatus('error');
+            // Check for Quota Exceeded
+            if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22)) {
+                alert("Storage Full! Your images might be too large (Base64). Please use direct URLs instead.");
+            }
+        }
+    }, 1000); // Wait 1s after last change before saving
+
+    return () => clearTimeout(timer);
   }, [profile]);
+
+  // Manual Save Function
+  const handleManualSave = () => {
+      setSaveStatus('saving');
+      try {
+          localStorage.setItem('guns_lol_clone_profile', JSON.stringify(profile));
+          // Quick feedback
+          setTimeout(() => {
+            setSaveStatus('saved');
+            setTimeout(() => setSaveStatus('idle'), 2000);
+          }, 400);
+      } catch (e) {
+          console.error("Manual save failed:", e);
+          setSaveStatus('error');
+          if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22)) {
+              alert("Storage Full! Your images might be too large (Base64). Please use direct URLs instead.");
+          }
+      }
+  };
 
   // Persist muted state
   useEffect(() => {
@@ -157,7 +192,9 @@ const App: React.FC = () => {
         profile={profile} 
         setProfile={setProfile} 
         isOpen={isEditorOpen} 
-        onClose={() => setIsEditorOpen(false)} 
+        onClose={() => setIsEditorOpen(false)}
+        saveStatus={saveStatus}
+        onSave={handleManualSave}
       />
 
       {/* Volume Hint (Simulated) */}

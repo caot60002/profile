@@ -9,9 +9,10 @@ interface EditorProps {
   isOpen: boolean;
   onClose: () => void;
   saveStatus?: 'idle' | 'saving' | 'saved' | 'error';
+  onSave: () => void;
 }
 
-const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, saveStatus = 'idle' }) => {
+const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, saveStatus = 'idle', onSave }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'links' | 'ai'>('general');
   
   // AI State
@@ -72,9 +73,17 @@ const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, s
                     {saveStatus === 'error' && <span className="text-[10px] text-red-500 font-mono">SAVE FAILED (CHECK SIZE)</span>}
                 </div>
             </div>
-            <button onClick={onClose} className="text-white/50 hover:text-white">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M18 6L6 18M6 6l12 12"/></svg>
-            </button>
+            <div className="flex items-center gap-3">
+                <button 
+                    onClick={onSave}
+                    className="px-3 py-1.5 bg-white text-black text-[10px] font-bold font-mono rounded hover:bg-gray-200 transition-colors uppercase tracking-wider"
+                >
+                    Save
+                </button>
+                <button onClick={onClose} className="text-white/50 hover:text-white">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
         </div>
 
         {/* Tabs */}

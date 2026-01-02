@@ -13,7 +13,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onClose }) => {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         // Mock Credentials
-        if (username === 'admin' && password === '123') {
+        if (username === 'TuDev' && password === 'ToiLaTu?') {
             onSuccess();
         } else {
             setError(true);

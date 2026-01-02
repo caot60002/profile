@@ -18,6 +18,11 @@ export interface Profile {
   musicUrl?: string; // Optional music
 }
 
+export interface ServerConfig {
+  binId: string;
+  apiKey: string;
+}
+
 export enum GenerationTone {
   EDGY = 'edgy',
   AESTHETIC = 'aesthetic',

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Profile, SocialLink, GenerationTone } from '../types';
+import { Profile, SocialLink, GenerationTone, ServerConfig } from '../types';
 import { Icon } from './Icons';
 import { generateAestheticBio } from '../services/geminiService';
 
@@ -10,9 +10,10 @@ interface EditorProps {
   onClose: () => void;
   saveStatus?: 'idle' | 'saving' | 'saved' | 'error';
   onSave: () => void;
+  serverConfig: ServerConfig | null;
 }
 
-const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, saveStatus = 'idle', onSave }) => {
+const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, saveStatus = 'idle', onSave, serverConfig }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'links' | 'ai'>('general');
   
   // AI State
@@ -20,12 +21,14 @@ const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, s
   const [aiTone, setAiTone] = useState<GenerationTone>(GenerationTone.EDGY);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Copy Feedback
+  const [copied, setCopied] = useState<string | null>(null);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     let finalValue = value;
 
     // Smart Fix: Auto-convert GitHub blob links to raw links for images
-    // Ex: https://github.com/user/repo/blob/main/img.gif -> https://raw.githubusercontent.com/user/repo/main/img.gif
     if ((name === 'backgroundUrl' || name === 'avatarUrl' || name === 'musicUrl') && value.includes('github.com') && value.includes('/blob/')) {
         finalValue = value.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
     }
@@ -61,6 +64,12 @@ const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, s
       }));
   };
 
+  const copyToClipboard = (text: string, label: string) => {
+      navigator.clipboard.writeText(text);
+      setCopied(label);
+      setTimeout(() => setCopied(null), 2000);
+  };
+
   return (
     <div className={`fixed top-0 right-0 bottom-0 w-full sm:w-96 bg-[#0f0f0f] border-l border-white/10 z-50 transform transition-transform duration-300 overflow-y-auto ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         {/* Header */}
@@ -70,7 +79,7 @@ const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, s
                 <div className="h-4">
                     {saveStatus === 'saving' && <span className="text-[10px] text-yellow-500 font-mono animate-pulse">SAVING...</span>}
                     {saveStatus === 'saved' && <span className="text-[10px] text-green-500 font-mono">ALL CHANGES SAVED</span>}
-                    {saveStatus === 'error' && <span className="text-[10px] text-red-500 font-mono">SAVE FAILED (CHECK SIZE)</span>}
+                    {saveStatus === 'error' && <span className="text-[10px] text-red-500 font-mono">SAVE FAILED</span>}
                 </div>
             </div>
             <div className="flex items-center gap-3">
@@ -112,6 +121,34 @@ const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, s
         <div className="p-6 space-y-6">
             {activeTab === 'general' && (
                 <>
+                    {/* Deployment Info Section */}
+                    {serverConfig && (
+                        <div className="bg-blue-900/10 border border-blue-500/20 p-3 rounded mb-4">
+                            <h3 className="text-blue-300 font-bold text-xs mb-2 flex items-center">
+                                🌐 Deployment Info (Public Access)
+                            </h3>
+                            <p className="text-blue-200/50 text-[10px] mb-3">
+                                Copy these values into <code>config.ts</code> to make your profile visible to everyone.
+                            </p>
+                            <div className="space-y-2">
+                                <div 
+                                    className="bg-black/50 p-2 rounded border border-white/10 text-[10px] font-mono text-white/70 break-all cursor-pointer hover:bg-white/5"
+                                    onClick={() => copyToClipboard(serverConfig.binId, 'id')}
+                                >
+                                    <span className="text-blue-400 block mb-1">BIN ID {copied === 'id' && '(Copied!)'}</span>
+                                    {serverConfig.binId}
+                                </div>
+                                <div 
+                                    className="bg-black/50 p-2 rounded border border-white/10 text-[10px] font-mono text-white/70 break-all cursor-pointer hover:bg-white/5"
+                                    onClick={() => copyToClipboard(serverConfig.apiKey, 'key')}
+                                >
+                                    <span className="text-blue-400 block mb-1">API KEY {copied === 'key' && '(Copied!)'}</span>
+                                    {serverConfig.apiKey}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="space-y-1">
                         <label className="text-xs text-white/40 uppercase font-mono">Username</label>
                         <input 
@@ -142,7 +179,6 @@ const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, s
                             placeholder="Supports Images & Videos (GitHub Raw)"
                             className="w-full bg-black/50 border border-white/10 rounded p-2 text-xs text-white focus:border-white/40 outline-none"
                         />
-                        <p className="text-[10px] text-white/30">Paste any GitHub image/video link, we'll fix it.</p>
                     </div>
                      <div className="space-y-1">
                         <label className="text-xs text-white/40 uppercase font-mono">Background URL</label>
@@ -154,7 +190,6 @@ const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, s
                             placeholder="Supports Images & Videos (GitHub Raw)"
                             className="w-full bg-black/50 border border-white/10 rounded p-2 text-xs text-white focus:border-white/40 outline-none"
                         />
-                        <p className="text-[10px] text-white/30">Paste any GitHub image/video link, we'll fix it.</p>
                     </div>
                     <div className="space-y-1">
                         <label className="text-xs text-white/40 uppercase font-mono">Music URL</label>
@@ -166,7 +201,6 @@ const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, s
                             placeholder="YouTube link or MP3/Audio URL"
                             className="w-full bg-black/50 border border-white/10 rounded p-2 text-xs text-white focus:border-white/40 outline-none"
                         />
-                        <p className="text-[10px] text-white/30">Auto-plays on enter.</p>
                     </div>
                      <div className="space-y-1">
                         <label className="text-xs text-white/40 uppercase font-mono">Accent Color</label>

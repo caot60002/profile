@@ -8,9 +8,10 @@ interface EditorProps {
   setProfile: React.Dispatch<React.SetStateAction<Profile>>;
   isOpen: boolean;
   onClose: () => void;
+  saveStatus?: 'idle' | 'saving' | 'saved' | 'error';
 }
 
-const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose }) => {
+const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose, saveStatus = 'idle' }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'links' | 'ai'>('general');
   
   // AI State
@@ -63,7 +64,14 @@ const Editor: React.FC<EditorProps> = ({ profile, setProfile, isOpen, onClose })
     <div className={`fixed top-0 right-0 bottom-0 w-full sm:w-96 bg-[#0f0f0f] border-l border-white/10 z-50 transform transition-transform duration-300 overflow-y-auto ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-white/10 sticky top-0 bg-[#0f0f0f] z-10">
-            <h2 className="text-white font-mono font-bold">PAGE EDITOR</h2>
+            <div className="flex flex-col">
+                <h2 className="text-white font-mono font-bold">PAGE EDITOR</h2>
+                <div className="h-4">
+                    {saveStatus === 'saving' && <span className="text-[10px] text-yellow-500 font-mono animate-pulse">SAVING...</span>}
+                    {saveStatus === 'saved' && <span className="text-[10px] text-green-500 font-mono">ALL CHANGES SAVED</span>}
+                    {saveStatus === 'error' && <span className="text-[10px] text-red-500 font-mono">SAVE FAILED (CHECK SIZE)</span>}
+                </div>
+            </div>
             <button onClick={onClose} className="text-white/50 hover:text-white">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M18 6L6 18M6 6l12 12"/></svg>
             </button>

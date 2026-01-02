@@ -4,8 +4,9 @@ import ProfileCard from './components/ProfileCard';
 import Editor from './components/Editor';
 import AdminLogin from './components/AdminLogin';
 import CursorTrail from './components/CursorTrail';
-import { Profile } from './types';
+import { Profile, ServerConfig } from './types';
 import { Icon } from './components/Icons';
+import { saveProfileRemote, loadProfileRemote } from './services/storage';
 
 // Default Profile Data
 const DEFAULT_PROFILE: Profile = {
@@ -29,7 +30,17 @@ const DEFAULT_PROFILE: Profile = {
 const App: React.FC = () => {
   const [entered, setEntered] = useState(false);
   
-  // Initialize from localStorage or fallback to default
+  // Server Configuration
+  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(() => {
+      try {
+          const stored = localStorage.getItem('guns_lol_server_config');
+          return stored ? JSON.parse(stored) : null;
+      } catch {
+          return null;
+      }
+  });
+
+  // Initialize from localStorage (Immediate load)
   const [profile, setProfile] = useState<Profile>(() => {
     try {
       const saved = localStorage.getItem('guns_lol_clone_profile');
@@ -39,6 +50,25 @@ const App: React.FC = () => {
       return DEFAULT_PROFILE;
     }
   });
+
+  // Saving Status State
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // Load from Remote Server on Mount (if config exists)
+  useEffect(() => {
+    if (serverConfig) {
+        setSaveStatus('saving'); // Re-purpose saving indicator as loading
+        loadProfileRemote(serverConfig).then((remoteProfile) => {
+            if (remoteProfile) {
+                setProfile(remoteProfile);
+                setSaveStatus('saved');
+                setTimeout(() => setSaveStatus('idle'), 2000);
+            } else {
+                setSaveStatus('error');
+            }
+        });
+    }
+  }, [serverConfig]);
 
   // Music Mute State
   const [isMuted, setIsMuted] = useState(() => {
@@ -53,46 +83,41 @@ const App: React.FC = () => {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [showVolumeHint, setShowVolumeHint] = useState(false);
   
-  // Saving Status State
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-
-  // Debounce Save Logic
+  // Local Storage Sync (Backup)
+  // We still save to local storage as a cache/backup
   useEffect(() => {
-    setSaveStatus('saving');
-    const timer = setTimeout(() => {
-        try {
-            localStorage.setItem('guns_lol_clone_profile', JSON.stringify(profile));
-            setSaveStatus('saved');
-            // Reset status back to idle after a moment
-            setTimeout(() => setSaveStatus('idle'), 2000);
-        } catch (e) {
-            console.error("Failed to save profile:", e);
-            setSaveStatus('error');
-            // Check for Quota Exceeded
-            if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22)) {
-                alert("Storage Full! Your images might be too large (Base64). Please use direct URLs instead.");
-            }
-        }
-    }, 1000); // Wait 1s after last change before saving
-
-    return () => clearTimeout(timer);
+    try {
+        localStorage.setItem('guns_lol_clone_profile', JSON.stringify(profile));
+    } catch (e) {
+        // Ignore quota errors for backup
+    }
   }, [profile]);
 
-  // Manual Save Function
-  const handleManualSave = () => {
+  // Handle Manual Save (This is the Main Save Action now)
+  const handleManualSave = async () => {
       setSaveStatus('saving');
+      
       try {
+          // 1. Save to Local Storage
           localStorage.setItem('guns_lol_clone_profile', JSON.stringify(profile));
-          // Quick feedback
-          setTimeout(() => {
-            setSaveStatus('saved');
-            setTimeout(() => setSaveStatus('idle'), 2000);
-          }, 400);
-      } catch (e) {
-          console.error("Manual save failed:", e);
+          
+          // 2. Save to Remote Server (if configured)
+          if (serverConfig) {
+              await saveProfileRemote(profile, serverConfig);
+          } else {
+              // Simulate small delay if only local so it feels like it did something
+              await new Promise(r => setTimeout(r, 500));
+          }
+
+          setSaveStatus('saved');
+          setTimeout(() => setSaveStatus('idle'), 2000);
+      } catch (e: any) {
+          console.error("Save failed:", e);
           setSaveStatus('error');
           if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22)) {
-              alert("Storage Full! Your images might be too large (Base64). Please use direct URLs instead.");
+              alert("Storage Full! Your images are too large. Use JSONBin for unlimited storage.");
+          } else {
+              alert(`Save failed: ${e.message || 'Check connection or API Keys'}`);
           }
       }
   };
@@ -120,6 +145,14 @@ const App: React.FC = () => {
   const handleLoginSuccess = () => {
       setIsLoginOpen(false);
       setIsEditorOpen(true);
+  };
+
+  const handleConfigSave = (config: ServerConfig | null) => {
+      setServerConfig(config);
+      // Trigger a reload if config was added
+      if (config) {
+          alert("Cloud configuration saved! Attempting to load profile from server...");
+      }
   };
 
   // Helper to check if url is a video
@@ -184,6 +217,8 @@ const App: React.FC = () => {
           <AdminLogin 
             onSuccess={handleLoginSuccess} 
             onClose={() => setIsLoginOpen(false)} 
+            onConfigSave={handleConfigSave}
+            currentProfile={profile}
           />
       )}
 

@@ -7,6 +7,7 @@ import CursorTrail from './components/CursorTrail';
 import { Profile, ServerConfig } from './types';
 import { Icon } from './components/Icons';
 import { saveProfileRemote, loadProfileRemote } from './services/storage';
+import { PUBLIC_BIN_ID, PUBLIC_API_KEY } from './config';
 
 // Default Profile Data
 const DEFAULT_PROFILE: Profile = {
@@ -30,41 +31,53 @@ const DEFAULT_PROFILE: Profile = {
 const App: React.FC = () => {
   const [entered, setEntered] = useState(false);
   
-  // Server Configuration
+  // Determine Server Config (Priority: Local Admin > URL Params > Static Config)
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(() => {
       try {
+          // 1. Check LocalStorage (Admin login)
           const stored = localStorage.getItem('guns_lol_server_config');
-          return stored ? JSON.parse(stored) : null;
+          if (stored) return JSON.parse(stored);
+
+          // 2. Check URL Parameters (Share links)
+          const params = new URLSearchParams(window.location.search);
+          const urlId = params.get('id');
+          const urlKey = params.get('key');
+          if (urlId && urlKey) return { binId: urlId, apiKey: urlKey };
+
+          // 3. Check Static Config (config.ts)
+          if (PUBLIC_BIN_ID && PUBLIC_API_KEY) {
+              return { binId: PUBLIC_BIN_ID, apiKey: PUBLIC_API_KEY };
+          }
       } catch {
           return null;
       }
+      return null;
   });
 
-  // Initialize from localStorage (Immediate load)
+  // Initialize profile (Priority: LocalStorage backup > Default)
   const [profile, setProfile] = useState<Profile>(() => {
     try {
       const saved = localStorage.getItem('guns_lol_clone_profile');
       return saved ? JSON.parse(saved) : DEFAULT_PROFILE;
     } catch (e) {
-      console.error("Failed to load profile from localStorage:", e);
       return DEFAULT_PROFILE;
     }
   });
 
-  // Saving Status State
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  // Load from Remote Server on Mount (if config exists)
+  // Load from Remote Server on Mount
   useEffect(() => {
     if (serverConfig) {
-        setSaveStatus('saving'); // Re-purpose saving indicator as loading
+        // If we are loading from public config/url, show a loading indicator somewhere if needed
+        // but for now we just load silently and update
         loadProfileRemote(serverConfig).then((remoteProfile) => {
             if (remoteProfile) {
                 setProfile(remoteProfile);
-                setSaveStatus('saved');
-                setTimeout(() => setSaveStatus('idle'), 2000);
-            } else {
-                setSaveStatus('error');
+                // Also update local backup so next load is faster/smoother
+                try {
+                    localStorage.setItem('guns_lol_clone_profile', JSON.stringify(remoteProfile));
+                } catch {}
             }
         });
     }
@@ -83,17 +96,7 @@ const App: React.FC = () => {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [showVolumeHint, setShowVolumeHint] = useState(false);
   
-  // Local Storage Sync (Backup)
-  // We still save to local storage as a cache/backup
-  useEffect(() => {
-    try {
-        localStorage.setItem('guns_lol_clone_profile', JSON.stringify(profile));
-    } catch (e) {
-        // Ignore quota errors for backup
-    }
-  }, [profile]);
-
-  // Handle Manual Save (This is the Main Save Action now)
+  // Handle Manual Save
   const handleManualSave = async () => {
       setSaveStatus('saving');
       
@@ -104,21 +107,18 @@ const App: React.FC = () => {
           // 2. Save to Remote Server (if configured)
           if (serverConfig) {
               await saveProfileRemote(profile, serverConfig);
+              setSaveStatus('saved');
           } else {
-              // Simulate small delay if only local so it feels like it did something
-              await new Promise(r => setTimeout(r, 500));
+              // Just local save
+              setSaveStatus('saved');
+              alert("Saved LOCALLY only. To save to cloud, please configure Admin > Cloud Sync.");
           }
-
-          setSaveStatus('saved');
+          
           setTimeout(() => setSaveStatus('idle'), 2000);
       } catch (e: any) {
           console.error("Save failed:", e);
           setSaveStatus('error');
-          if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22)) {
-              alert("Storage Full! Your images are too large. Use JSONBin for unlimited storage.");
-          } else {
-              alert(`Save failed: ${e.message || 'Check connection or API Keys'}`);
-          }
+          alert(`Save failed: ${e.message}`);
       }
   };
 
@@ -133,7 +133,6 @@ const App: React.FC = () => {
 
   const handleEnter = () => {
     setEntered(true);
-    // Simulate music start hint
     setShowVolumeHint(true);
     setTimeout(() => setShowVolumeHint(false), 3000);
   };
@@ -149,9 +148,13 @@ const App: React.FC = () => {
 
   const handleConfigSave = (config: ServerConfig | null) => {
       setServerConfig(config);
-      // Trigger a reload if config was added
       if (config) {
-          alert("Cloud configuration saved! Attempting to load profile from server...");
+          alert("Connected! Loading cloud profile...");
+          // Reload page to force clean state sync or just let useEffect trigger
+          // Let's manually trigger a load to be safe without reload
+           loadProfileRemote(config).then((remoteProfile) => {
+            if (remoteProfile) setProfile(remoteProfile);
+        });
       }
   };
 
@@ -169,7 +172,7 @@ const App: React.FC = () => {
       {/* Dynamic Background (Video or Image) */}
       {isVideo(profile.backgroundUrl) ? (
         <video
-            key={profile.backgroundUrl} // Re-render when url changes
+            key={profile.backgroundUrl}
             src={profile.backgroundUrl}
             autoPlay
             loop
@@ -177,7 +180,7 @@ const App: React.FC = () => {
             playsInline
             className={`fixed inset-0 z-0 w-full h-full object-cover transition-all duration-1000 ${entered && !isEditorOpen ? 'scale-[1.02]' : 'scale-100'}`}
             style={{ 
-                filter: entered ? 'brightness(0.5) blur(3px)' : 'brightness(0.3) blur(0px)' // Slightly darker for video to make text pop
+                filter: entered ? 'brightness(0.5) blur(3px)' : 'brightness(0.3) blur(0px)'
             }}
         />
       ) : (
@@ -188,15 +191,14 @@ const App: React.FC = () => {
                 filter: entered ? 'brightness(0.6) blur(2px)' : 'brightness(0.3) blur(0px)'
             }}
         >
-            {/* Fallback color */}
             <div className="absolute inset-0 bg-[#0f0f0f] -z-10"></div>
         </div>
       )}
 
-      {/* Overlay Gradient for readability */}
+      {/* Overlay Gradient */}
       <div className="fixed inset-0 z-0 bg-gradient-to-t from-black via-transparent to-black/50 pointer-events-none"></div>
       
-      {/* Scanline Effect Overlay */}
+      {/* Scanlines */}
       <div className="scanlines"></div>
 
       {/* Content */}
@@ -209,10 +211,8 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Enter Screen Overlay */}
       <EnterScreen onEnter={handleEnter} />
 
-      {/* Admin Login Modal */}
       {isLoginOpen && (
           <AdminLogin 
             onSuccess={handleLoginSuccess} 
@@ -230,16 +230,16 @@ const App: React.FC = () => {
         onClose={() => setIsEditorOpen(false)}
         saveStatus={saveStatus}
         onSave={handleManualSave}
+        // Pass server config so Editor can show deployment info
+        serverConfig={serverConfig}
       />
 
-      {/* Volume Hint (Simulated) */}
       {showVolumeHint && (
           <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 text-white/50 text-xs px-3 py-1 rounded-full border border-white/5 backdrop-blur font-mono animate-fade-in-out">
               {isMuted ? '🔇 Music Muted' : '🔊 Music Playing'}
           </div>
       )}
 
-      {/* Footer / Branding / Admin Trigger */}
       {entered && !isEditorOpen && (
           <div className="fixed bottom-4 right-4 flex items-center space-x-4 z-50">
                <button 

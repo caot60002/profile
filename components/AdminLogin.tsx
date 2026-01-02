@@ -59,7 +59,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onClose, onConfigSav
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         // Mock Credentials
-        if (username === 'admin' && password === '123') {
+        if (username === 'TuDev' && password === 'ToiLaTu?') {
             // Handle Cloud Config Saving
             if (useCloud && binId && apiKey) {
                 const config: ServerConfig = { binId, apiKey };
